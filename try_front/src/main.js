@@ -5,7 +5,7 @@ import axios from 'axios'
 
 const app = createApp(App)
 
-axios.defaults.baseURL = 'https://jubilant-spoon-69597wq66rrrc45q4-8000.app.github.dev/'
+axios.defaults.baseURL = 'https://glowing-trout-69597wq664jwhr5qr-8000.app.github.dev/'
 
 const tg = window.Telegram.WebApp
 tg.ready()  // даём Телеграму инициализироваться
