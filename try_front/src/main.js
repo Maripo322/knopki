@@ -5,12 +5,16 @@ import axios from 'axios'
 
 const app = createApp(App)
 
-axios.defaults.baseURL = 'https://effective-space-chainsaw-wr5rjxp664qrf5qjx-8000.app.github.dev/' 
+axios.defaults.baseURL = 'https://effective-space-chainsaw-wr5rjxp664qrf5qjx-8000.app.github.dev/'
 
-// Получаем tg_id один раз и сохраняем
 const tg = window.Telegram.WebApp
+tg.ready()  // даём Телеграму инициализироваться
+
+// Сохраняем tg_id в localStorage при старте
 if (tg.initDataUnsafe?.user?.id) {
   localStorage.setItem('tg_id', tg.initDataUnsafe.user.id)
+} else {
+  console.warn('Telegram WebApp initDataUnsafe.user.id отсутствует')
 }
 
 app.use(router)

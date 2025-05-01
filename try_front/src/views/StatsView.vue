@@ -1,26 +1,46 @@
 <template>
   <div>
-    <h2>Статистика</h2>
-    <p>Выучено слов: {{ stats.learnedCount }}</p>
-    <p>В повторении: {{ stats.repeatCount }}</p>
-    <button @click="goBack">Назад</button>
+    <h1>Статистика</h1>
+
+    <div v-if="loadError">
+      <p style="color: red;">{{ loadError }}</p>
+    </div>
+
+    <div v-else-if="stats">
+      <p>Изучено слов: {{ stats.learnedCount }}</p>
+      <p>В повторении: {{ stats.repeatCount }}</p>
+    </div>
+
+    <div v-else>
+      <p>Загрузка...</p>
+    </div>
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+<script>
+import axios from 'axios'
 
-const stats = ref({})
-const router = useRouter()
-const tgId = window.Telegram.WebApp.initDataUnsafe?.user?.id
-
-onMounted(async () => {
-  const res = await fetch(`/api/stats/${tgId}`)
-  stats.value = await res.json()
-})
-
-const goBack = () => {
-  router.push('/')
+export default {
+  data() {
+    return {
+      tg_id: null,
+      stats: null,
+      loadError: ''
+    }
+  },
+  async mounted() {
+    this.tg_id = localStorage.getItem('tg_id')
+    if (!this.tg_id) {
+      this.loadError = 'Ошибка: tg_id не найден.'
+      return
+    }
+    try {
+      const res = await axios.get(`/api/stats/${this.tg_id}`)
+      this.stats = res.data
+    } catch (e) {
+      this.loadError = 'Не удалось получить статистику.'
+      console.error(e)
+    }
+  }
 }
 </script>

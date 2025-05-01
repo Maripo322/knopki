@@ -1,57 +1,121 @@
 <template>
   <div>
-    <h2>Вопрос дня</h2>
-    <p v-if="quizData">{{ quizData.word_eng }}</p>
-    <p v-else>Загрузка...</p>
+    <h1>Вопрос дня</h1>
 
-    <div v-if="quizData">
-      <button
-        v-for="option in quizData.options"
-        :key="option.word_id"
-        @click="submitAnswer(option.word_id)"
-      >
-        {{ option.word_rus }}
-      </button>
+    <!-- Если нет tg_id — покажем сообщение -->
+    <div v-if="loadError">
+      <p style="color: red;">{{ loadError }}</p>
     </div>
 
-    <button @click="goToStats" class="stats-button">Статистика</button>
+    <!-- Если вопрос успешно загружен -->
+    <div v-else-if="word">
+      <p><strong>Английское слово:</strong> {{ word.word_eng }}</p>
+      <p><strong>Повторение:</strong> {{ word.was_in_repeat ? 'Да' : 'Нет' }}</p>
+
+      <div class="options">
+        <button
+          v-for="opt in options"
+          :key="opt.word_id"
+          :disabled="answered"
+          @click="submitAnswer(opt)"
+        >
+          {{ opt.word_rus }}
+        </button>
+      </div>
+
+      <p v-if="answered"><strong>{{ feedback }}</strong></p>
+    </div>
+
+    <!-- Пока ждём загрузки -->
+    <div v-else>
+      <p>Загрузка...</p>
+    </div>
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+<script>
+import axios from 'axios'
 
-const quizData = ref(null)
-const router = useRouter()
-const tgId = window.Telegram.WebApp.initDataUnsafe?.user?.id
+export default {
+  data() {
+    return {
+      tg_id: null,
+      word: null,
+      options: [],
+      answered: false,
+      feedback: '',
+      loadError: ''
+    }
+  },
+  async mounted() {
+    // Берём tg_id из localStorage
+    this.tg_id = localStorage.getItem('tg_id')
+    if (!this.tg_id) {
+      this.loadError = 'Ошибка: tg_id не найден. Попробуйте перезапустить мини-приложение.'
+      console.error(this.loadError)
+      return
+    }
+    this.loadQuiz()
+  },
+  methods: {
+    async loadQuiz() {
+      this.answered = false
+      this.feedback = ''
+      try {
+        const { data } = await axios.get(`/api/quiz/${this.tg_id}`)
+        if (data.error) {
+          this.loadError = data.error
+          return
+        }
+        if (!data.word || !Array.isArray(data.options)) {
+          this.loadError = 'Неправильный формат ответа от API.'
+          console.error('API ответ:', data)
+          return
+        }
+        this.word = data.word
+        this.options = data.options
+      } catch (e) {
+        this.loadError = 'Не удалось получить вопрос. Проверьте соединение.'
+        console.error(e)
+      }
+    },
+    async submitAnswer(opt) {
+      this.answered = true
+      const isCorrect = opt.word_id === this.word.word_id
+      this.feedback = isCorrect
+        ? 'Правильно! 🎉'
+        : `Неправильно 😕. Правильный ответ: ${this.word.word_rus}`
 
-onMounted(async () => {
-  const res = await fetch(`/api/quiz/${tgId}`)
-  quizData.value = await res.json()
-})
+      try {
+        await axios.post('/api/answer', {
+          tg_id: this.tg_id,
+          word_id: this.word.word_id,
+          was_in_repeat: this.word.was_in_repeat,
+          is_correct: isCorrect
+        })
+      } catch (e) {
+        console.error('Ошибка при отправке ответа:', e)
+      }
 
-const submitAnswer = async (selectedId) => {
-  await fetch('/api/answer', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      tg_id: tgId,
-      word_id: quizData.value.word_id,
-      was_in_repeat: quizData.value.was_in_repeat
-    })
-  })
-  // Обновить или показать следующее слово
-}
-
-const goToStats = () => {
-  router.push('/stats')
+      setTimeout(this.loadQuiz, 2000)
+    }
+  }
 }
 </script>
 
 <style scoped>
-.stats-button {
-  margin-top: 20px;
-  padding: 10px;
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+.options button {
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 16px;
+}
+.options button:disabled {
+  opacity: 0.6;
 }
 </style>
