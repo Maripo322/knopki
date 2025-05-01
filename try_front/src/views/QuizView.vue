@@ -2,13 +2,18 @@
   <div>
     <h1>Вопрос дня</h1>
 
-    <!-- Если нет tg_id — покажем сообщение -->
+    <!-- Кнопка запуска -->
+    <div v-if="!quizStarted">
+      <button @click="startQuiz">Начать</button>
+    </div>
+
+    <!-- Ошибка -->
     <div v-if="loadError">
       <p style="color: red;">{{ loadError }}</p>
     </div>
 
-    <!-- Если вопрос успешно загружен -->
-    <div v-else-if="word">
+    <!-- Вопрос -->
+    <div v-if="word">
       <p><strong>Английское слово:</strong> {{ word.word_eng }}</p>
       <p><strong>Повторение:</strong> {{ word.was_in_repeat ? 'Да' : 'Нет' }}</p>
 
@@ -26,8 +31,8 @@
       <p v-if="answered"><strong>{{ feedback }}</strong></p>
     </div>
 
-    <!-- Пока ждём загрузки -->
-    <div v-else>
+    <!-- Загрузка -->
+    <div v-else-if="loading">
       <p>Загрузка...</p>
     </div>
   </div>
@@ -44,23 +49,26 @@ export default {
       options: [],
       answered: false,
       feedback: '',
-      loadError: ''
+      loadError: '',
+      loading: false,
+      quizStarted: false
     }
   },
-  async mounted() {
-    // Берём tg_id из localStorage
+  mounted() {
     this.tg_id = localStorage.getItem('tg_id')
     if (!this.tg_id) {
-      this.loadError = 'Ошибка: tg_id не найден. Попробуйте перезапустить мини-приложение.'
-      console.error(this.loadError)
-      return
+      this.loadError = 'Ошибка: tg_id не найден.'
     }
-    this.loadQuiz()
   },
   methods: {
-    async loadQuiz() {
+    async startQuiz() {
+      this.quizStarted = true
+      this.loading = true
       this.answered = false
       this.feedback = ''
+      this.word = null
+      this.options = []
+
       try {
         const { data } = await axios.get(`/api/quiz/${this.tg_id}`)
         if (data.error) {
@@ -69,14 +77,15 @@ export default {
         }
         if (!data.word || !Array.isArray(data.options)) {
           this.loadError = 'Неправильный формат ответа от API.'
-          console.error('API ответ:', data)
           return
         }
         this.word = data.word
         this.options = data.options
       } catch (e) {
-        this.loadError = 'Не удалось получить вопрос. Проверьте соединение.'
+        this.loadError = 'Не удалось загрузить вопрос.'
         console.error(e)
+      } finally {
+        this.loading = false
       }
     },
     async submitAnswer(opt) {
@@ -97,7 +106,12 @@ export default {
         console.error('Ошибка при отправке ответа:', e)
       }
 
-      setTimeout(this.loadQuiz, 2000)
+      setTimeout(() => {
+        this.word = null
+        this.feedback = ''
+        this.answered = false
+        this.startQuiz()
+      }, 2000)
     }
   }
 }
@@ -117,5 +131,9 @@ export default {
 }
 .options button:disabled {
   opacity: 0.6;
+}
+button {
+  padding: 10px 20px;
+  font-size: 18px;
 }
 </style>
