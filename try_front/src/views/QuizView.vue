@@ -15,16 +15,18 @@
     <!-- Вопрос -->
     <div v-if="word">
       <p><strong>Английское слово:</strong> {{ word.word_eng }}</p>
+      <p v-if="!isSpecialMode"><strong>Повторение:</strong> {{ word.was_in_repeat ? 'Да' : 'Нет' }}</p>
 
-      <div v-if="isSpecialMode" class="options-grid">
+      <!-- Общий блок для вариантов ответов -->
+      <div class="options-grid">
         <button
-          v-for="(option, index) in word.options"
+          v-for="(option, index) in currentOptions"
           :key="index"
           :disabled="answered"
           @click="submitAnswer(option)"
           class="option-button"
         >
-          {{ option }}
+          {{ optionText(option) }}
         </button>
       </div>
 
@@ -52,6 +54,7 @@ export default {
     return {
       tg_id: null,
       word: null,
+      currentOptions: [],
       answered: false,
       feedback: '',
       loadError: '',
@@ -79,12 +82,17 @@ export default {
     }
   },
   methods: {
+    optionText(option) {
+      return this.isSpecialMode ? option : option.word_rus
+    },
+
     async startQuiz() {
       this.quizStarted = true
       this.loading = true
       this.answered = false
       this.feedback = ''
       this.word = null
+      this.currentOptions = []
 
       try {
         const url = this.isSpecialMode 
@@ -99,6 +107,24 @@ export default {
         }
         
         this.word = data
+        // Формируем варианты ответов в зависимости от режима
+        if (this.isSpecialMode) {
+          this.currentOptions = data.options || []
+        } else {
+          // Для обычного режима создаем массив из правильного ответа и 3 случайных
+          const allWords = await this.fetchRandomWords()
+          const options = allWords
+            .filter(w => w.word_id !== data.word_id)
+            .slice(0, 3)
+            .map(w => ({ word_rus: w.word_rus, word_id: w.word_id }))
+          
+          options.push({
+            word_rus: data.word_rus,
+            word_id: data.word_id
+          })
+          
+          this.currentOptions = this.shuffleArray(options)
+        }
       } catch (e) {
         this.loadError = 'Не удалось загрузить вопрос'
         console.error(e)
@@ -107,38 +133,28 @@ export default {
       }
     },
 
+    async fetchRandomWords() {
+      try {
+        const response = await axios.get('/api/words')
+        return response.data
+      } catch (e) {
+        console.error('Ошибка загрузки слов:', e)
+        return []
+      }
+    },
+
+    shuffleArray(array) {
+      return array.sort(() => Math.random() - 0.5)
+    },
+
     async submitAnswer(selectedOption) {
       this.answered = true
       
       if (this.isSpecialMode) {
-        try {
-          const response = await axios.post(`/api/quiz/${this.mode}/answer`, {
-            tg_id: this.tg_id,
-            word_id: this.word.word_id,
-            selected_option: selectedOption
-          })
-
-          this.feedback = response.data.correct 
-            ? 'Правильно! 🎉' 
-            : 'Неправильно 😕'
-
-          if (response.data.next && Object.keys(response.data.next).length > 0) {
-            setTimeout(() => {
-              this.word = response.data.next
-              this.answered = false
-            }, 1500)
-          } else {
-            setTimeout(() => {
-              this.quizStarted = false
-              this.word = null
-            }, 2000)
-          }
-        } catch (e) {
-          console.error('Ошибка ответа:', e)
-        }
+        // Логика для специальных режимов
       } else {
-        // Старая логика для обычного режима
-        const isCorrect = selectedOption === this.word.word_rus
+        // Логика для обычного режима
+        const isCorrect = selectedOption.word_id === this.word.word_id
         this.feedback = isCorrect
           ? 'Правильно! 🎉'
           : `Неправильно 😕. Правильный ответ: ${this.word.word_rus}`
@@ -164,44 +180,3 @@ export default {
   }
 }
 </script>
-
-<style scoped>
-.options-grid {
-  display: grid;
-  gap: 12px;
-  margin: 20px 0;
-}
-
-.option-button {
-  padding: 15px;
-  border-radius: 8px;
-  border: 2px solid #ddd;
-  background-color: #f8f9fa;
-  font-size: 16px;
-  transition: all 0.2s;
-}
-
-.option-button:disabled {
-  opacity: 0.7;
-}
-
-.option-button:not(:disabled):hover {
-  background-color: #e9ecef;
-  transform: translateY(-2px);
-}
-
-button {
-  padding: 12px 24px;
-  font-size: 16px;
-  border-radius: 8px;
-  border: none;
-  background-color: #007bff;
-  color: white;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-button:hover {
-  background-color: #0056b3;
-}
-</style>
