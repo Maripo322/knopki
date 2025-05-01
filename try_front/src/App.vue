@@ -11,6 +11,7 @@
     <nav class="bottom-nav">
       <button @click="goTo('/')">Вопрос</button>
       <button @click="goTo('/stats')">Статистика</button>
+      <button @click="goTo('/modes')">Режимы</button>
     </nav>
   </div>
 </template>
@@ -44,7 +45,7 @@ export default {
 <style>
 #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;
-  padding-bottom: 60px; /* чтобы не перекрывал контент */
+  padding-bottom: 60px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

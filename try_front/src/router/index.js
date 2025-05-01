@@ -1,10 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import QuizView from '../views/QuizView.vue'
 import StatsView from '../views/StatsView.vue'
+import ModesView from '../views/ModesView.vue'
 
 const routes = [
   { path: '/', component: QuizView },
-  { path: '/stats', component: StatsView }
+  { path: '/stats', component: StatsView },
+  { path: '/modes', component: ModesView },
+  { path: '/quiz/:mode', component: QuizView, props: true }
 ]
 
 const router = createRouter({
