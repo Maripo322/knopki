@@ -13,18 +13,18 @@
     </div>
 
     <!-- Вопрос -->
-    <div v-if="word">
-      <p><strong>Английское слово:</strong> {{ word.word_eng }}</p>
-      <p><strong>Повторение:</strong> {{ word.was_in_repeat ? 'Да' : 'Нет' }}</p>
+    <div v-if="currentWord">
+      <p><strong>Английское слово:</strong> {{ currentWord.word_eng }}</p>
+      <p><strong>Повторение:</strong> {{ currentWord.was_in_repeat ? 'Да' : 'Нет' }}</p>
 
       <div class="options">
         <button
-          v-for="opt in options"
-          :key="opt.word_id"
+          v-for="(option, index) in options"
+          :key="index"
           :disabled="answered"
-          @click="submitAnswer(opt)"
+          @click="submitAnswer(option)"
         >
-          {{ opt.word_rus }}
+          {{ option }}
         </button>
       </div>
 
@@ -45,7 +45,7 @@ export default {
   data() {
     return {
       tg_id: null,
-      word: null,
+      currentWord: null,
       options: [],
       answered: false,
       feedback: '',
@@ -66,21 +66,34 @@ export default {
       this.loading = true
       this.answered = false
       this.feedback = ''
-      this.word = null
+      this.currentWord = null
       this.options = []
 
       try {
-        const { data } = await axios.get(`/api/quiz/${this.tg_id}`)
-        if (data.error) {
-          this.loadError = data.error
+        // Получаем основное слово
+        const wordResponse = await axios.get(`/api/quiz/${this.tg_id}`)
+        
+        if (wordResponse.data.error) {
+          this.loadError = wordResponse.data.error
           return
         }
-        if (!data.word || !Array.isArray(data.options)) {
-          this.loadError = 'Неправильный формат ответа от API.'
-          return
+
+        // Получаем 3 случайных слова для вариантов
+        const randomWordsResponse = await axios.get(`/api/random-words/3`)
+        const randomOptions = randomWordsResponse.data
+
+        // Формируем данные
+        this.currentWord = {
+          word_id: wordResponse.data.word_id,
+          word_eng: wordResponse.data.word_eng,
+          word_rus: wordResponse.data.word_rus,
+          was_in_repeat: wordResponse.data.was_in_repeat
         }
-        this.word = data.word
-        this.options = data.options
+
+        // Создаем варианты ответов
+        this.options = [this.currentWord.word_rus, ...randomOptions]
+        this.shuffleOptions()
+
       } catch (e) {
         this.loadError = 'Не удалось загрузить вопрос.'
         console.error(e)
@@ -88,26 +101,43 @@ export default {
         this.loading = false
       }
     },
-    async submitAnswer(opt) {
+
+    shuffleOptions() {
+      // Перемешиваем варианты Fisher-Yates алгоритмом
+      for (let i = this.options.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this.options[i], this.options[j]] = [this.options[j], this.options[i]]
+      }
+    },
+
+    submitAnswer(selectedOption) {
       this.answered = true
-      const isCorrect = opt.word_id === this.word.word_id
+      const isCorrect = selectedOption === this.currentWord.word_rus
+      
       this.feedback = isCorrect
         ? 'Правильно! 🎉'
-        : `Неправильно 😕. Правильный ответ: ${this.word.word_rus}`
+        : `Неправильно 😕. Правильный ответ: ${this.currentWord.word_rus}`
 
+      this.sendAnswerToServer(isCorrect)
+      this.prepareNextQuestion()
+    },
+
+    async sendAnswerToServer(isCorrect) {
       try {
         await axios.post('/api/answer', {
           tg_id: this.tg_id,
-          word_id: this.word.word_id,
-          was_in_repeat: this.word.was_in_repeat,
+          word_id: this.currentWord.word_id,
+          was_in_repeat: this.currentWord.was_in_repeat,
           is_correct: isCorrect
         })
       } catch (e) {
         console.error('Ошибка при отправке ответа:', e)
       }
+    },
 
+    prepareNextQuestion() {
       setTimeout(() => {
-        this.word = null
+        this.currentWord = null
         this.feedback = ''
         this.answered = false
         this.startQuiz()
@@ -123,24 +153,32 @@ export default {
 }
 
 .options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 .options button {
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 16px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.options button:hover:not(:disabled) {
+  background-color: #f0f0f0;
 }
 
 .options button:disabled {
-  opacity: 0.6;
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 button {
   padding: 10px 20px;
   font-size: 18px;
+  margin-top: 10px;
 }
 </style>
